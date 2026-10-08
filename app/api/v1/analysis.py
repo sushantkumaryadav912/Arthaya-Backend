@@ -137,6 +137,11 @@ async def synthesis_endpoint(req: SynthesisRequest):
     )
     return {"data": summary, "status": "completed"}
 
+from app.database import AsyncSessionLocal
+from app.models.analysis import AnalysisRun, AgentStepLog
+from app.models.prediction import PredictionRecord
+from app.models.report import ResearchReport
+
 async def _execute_pipeline(ticker: str, horizon: str, depth: str, gateway: str, analysis_id: str) -> Dict[str, Any]:
     """Internal multi-agent pipeline execution logic."""
     market = await MarketService.get_stock_data(ticker)
@@ -154,6 +159,55 @@ async def _execute_pipeline(ticker: str, horizon: str, depth: str, gateway: str,
     summary = await ModelGateway.generate_synthesis(
         gateway, ticker, market, technical, fundamental, news, prediction, critic
     )
+
+    # Persist analysis run, prediction, and report to SQLite database
+    try:
+        async with AsyncSessionLocal() as db:
+            analysis_record = AnalysisRun(
+                id=analysis_id,
+                ticker=ticker.upper(),
+                horizon=horizon,
+                depth=depth,
+                status="completed",
+                gateway_provider=gateway,
+                critic_validation=critic,
+                ai_summary=summary,
+                completed_at=datetime.utcnow()
+            )
+            db.add(analysis_record)
+
+            pred_record = PredictionRecord(
+                id=f"pred_{uuid.uuid4().hex[:10]}",
+                analysis_id=analysis_id,
+                ticker=ticker.upper(),
+                horizon=horizon,
+                direction=prediction.get("direction", "NEUTRAL"),
+                probability=prediction.get("probability", 0.5),
+                model=prediction.get("model", "XGBoost"),
+                model_version=prediction.get("model_version", "xgb_1.3"),
+                breakdown=prediction.get("breakdown", []),
+                features_used=prediction.get("features_used", {})
+            )
+            db.add(pred_record)
+
+            report_record = ResearchReport(
+                id=f"rep_{uuid.uuid4().hex[:10]}",
+                analysis_id=analysis_id,
+                ticker=ticker.upper(),
+                company_name=market.get("name", ticker),
+                title=f"{ticker.upper()} Multi-Agent Financial Research Report",
+                summary=summary.get("market_context", ""),
+                content_markdown=f"### Technical View\n{summary.get('technical_view', '')}\n\n### Fundamental View\n{summary.get('fundamental_view', '')}",
+                overall_signal=summary.get("overall_signal", "NEUTRAL"),
+                probability=float(summary.get("probability", 0.5)),
+                confidence=summary.get("confidence", "Medium"),
+                model_name=gateway
+            )
+            db.add(report_record)
+            await db.commit()
+            print(f"💾 Persisted Analysis {analysis_id} into SQLite database!")
+    except Exception as db_err:
+        print(f"⚠️ Database persistence notice: {db_err}")
 
     return {
         "analysisId": analysis_id,
