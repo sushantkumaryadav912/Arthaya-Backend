@@ -101,6 +101,42 @@ async def stream_analysis_events(analysis_id: str, ticker: str = "AAPL", horizon
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+class CriticValidateRequest(BaseModel):
+    analysis_id: str
+    ticker: str
+
+class SynthesisRequest(BaseModel):
+    analysis_id: str
+    ticker: str
+    gateway_provider: str = "claude"
+
+@router.post("/critic-validate")
+async def critic_validate_endpoint(req: CriticValidateRequest):
+    market = await MarketService.get_stock_data(req.ticker)
+    technical = await TechnicalService.calculate_indicators(req.ticker)
+    fundamental = await FundamentalService.get_fundamentals(req.ticker)
+    news = await NewsService.get_news_sentiment(req.ticker)
+    features = FeatureBuilder.build_feature_vector(market, technical, fundamental, news, {}, datetime.utcnow())
+    prediction = await MLEngine.predict(req.ticker, "5D", features)
+    
+    critic_result = await CriticService.validate(market, technical, fundamental, news, prediction)
+    return {"data": critic_result, "status": "completed"}
+
+@router.post("/synthesis")
+async def synthesis_endpoint(req: SynthesisRequest):
+    market = await MarketService.get_stock_data(req.ticker)
+    technical = await TechnicalService.calculate_indicators(req.ticker)
+    fundamental = await FundamentalService.get_fundamentals(req.ticker)
+    news = await NewsService.get_news_sentiment(req.ticker)
+    features = FeatureBuilder.build_feature_vector(market, technical, fundamental, news, {}, datetime.utcnow())
+    prediction = await MLEngine.predict(req.ticker, "5D", features)
+    critic = await CriticService.validate(market, technical, fundamental, news, prediction)
+    
+    summary = await ModelGateway.generate_synthesis(
+        req.gateway_provider, req.ticker, market, technical, fundamental, news, prediction, critic
+    )
+    return {"data": summary, "status": "completed"}
+
 async def _execute_pipeline(ticker: str, horizon: str, depth: str, gateway: str, analysis_id: str) -> Dict[str, Any]:
     """Internal multi-agent pipeline execution logic."""
     market = await MarketService.get_stock_data(ticker)
@@ -131,3 +167,4 @@ async def _execute_pipeline(ticker: str, horizon: str, depth: str, gateway: str,
         "critic": critic,
         "summary": summary,
     }
+
