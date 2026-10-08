@@ -9,9 +9,10 @@ class TechnicalService:
         """Calculates real technical indicators (RSI, MACD, SMA, EMA, ATR, Bollinger) from live OHLCV prices."""
         try:
             t = yf.Ticker(ticker)
-            df = t.history(period="6m")
+            df = t.history(period="6mo")
             if df.empty or len(df) < 50:
                 raise ValueError("Insufficient price data")
+
 
             closes = df['Close']
             highs = df['High']

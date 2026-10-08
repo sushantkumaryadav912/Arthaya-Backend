@@ -8,7 +8,7 @@ from app.services.feature_builder import FeatureBuilder
 from app.services.ml_engine import MLEngine
 from app.services.critic_service import CriticService
 from app.services.model_gateway import ModelGateway
-from datetime import datetime
+from datetime import datetime, timezone
 
 async def test_aapl_run():
     print("🚀 Starting End-to-End Real-Data Analysis for AAPL...")
@@ -34,8 +34,9 @@ async def test_aapl_run():
     print(f"5. Historical Agent: Matches = {len(hist['analogues'])}, Expected 5D Return = {round(hist['mean_return_5d']*100, 2)}%")
 
     # 6. Feature Builder (Zero Leakage Cutoff)
-    features = FeatureBuilder.build_feature_vector(market, tech, fund, news, hist, datetime.utcnow())
+    features = FeatureBuilder.build_feature_vector(market, tech, fund, news, hist, datetime.now(timezone.utc))
     print(f"6. Feature Builder: Engineered {len(features)} features (Zero Leakage timestamp cutoff enforced).")
+
 
     # 7. ML Engine (Quant Prediction)
     pred = await MLEngine.predict("AAPL", "5D", features)
