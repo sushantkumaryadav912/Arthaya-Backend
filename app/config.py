@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
 
+    # Authentication & Security (Firebase + JWT)
+    JWT_SECRET: str = "arthaya-super-secret-jwt-key-change-in-production-2026"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    FIREBASE_PROJECT_ID: str = "arthaya"
+    FIREBASE_CREDENTIALS_JSON: Optional[str] = None
+    FIREBASE_AUTH_DISABLED: bool = False
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):

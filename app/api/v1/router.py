@@ -7,9 +7,11 @@ from app.api.v1.agents import router as agents_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.watchlist import router as watchlist_router
 from app.api.v1.data_sources import router as data_sources_router
+from app.api.v1.auth import router as auth_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
+api_v1_router.include_router(auth_router)
 api_v1_router.include_router(stocks_router)
 api_v1_router.include_router(analysis_router)
 api_v1_router.include_router(predictions_router)

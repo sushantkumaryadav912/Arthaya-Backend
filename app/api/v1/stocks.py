@@ -4,8 +4,9 @@ from app.services.technical_service import TechnicalService
 from app.services.fundamental_service import FundamentalService
 from app.services.news_service import NewsService
 from app.services.historical_service import HistoricalService
+from app.core.dependencies import get_current_user
 
-router = APIRouter(prefix="/stocks", tags=["stocks"])
+router = APIRouter(prefix="/stocks", tags=["stocks"], dependencies=[Depends(get_current_user)])
 
 @router.get("/{ticker}")
 async def get_stock_detail(ticker: str):

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import asyncio
@@ -17,6 +17,7 @@ from app.services.ml_engine import MLEngine
 from app.services.critic_service import CriticService
 from app.services.model_gateway import ModelGateway
 from app.services.n8n_client import N8NClient
+from app.core.dependencies import get_current_user, AuthenticatedUser
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -30,7 +31,7 @@ class AnalysisStartRequest(BaseModel):
 ANALYSIS_CACHE: Dict[str, Dict[str, Any]] = {}
 
 @router.post("")
-async def start_analysis(req: AnalysisStartRequest):
+async def start_analysis(req: AnalysisStartRequest, user: AuthenticatedUser = Depends(get_current_user)):
     analysis_id = f"ana_{uuid.uuid4().hex[:10]}"
     
     # Notify n8n Orchestrator at n8n.sushantkumaryadav.com.np
