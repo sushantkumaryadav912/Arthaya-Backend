@@ -1,6 +1,7 @@
 import httpx
 from typing import Dict, Any, Optional
 from app.config import settings
+from app.core.security import create_access_token
 
 class N8NClient:
     """Async HTTP client for n8n orchestrator at n8n.sushantkumaryadav.com.np"""
@@ -14,13 +15,21 @@ class N8NClient:
         gateway_provider: str = "claude"
     ) -> Dict[str, Any]:
         """Triggers the n8n orchestrator workflow for multi-agent execution."""
+        token = create_access_token(
+            user_id="n8n_orchestrator",
+            email="orchestrator@arthaya.ai",
+            role="admin",
+            display_name="n8n Orchestrator"
+        )
         payload = {
             "analysis_id": analysis_id,
             "ticker": ticker.upper(),
             "horizon": horizon,
             "depth": depth,
             "gateway_provider": gateway_provider,
+            "backend_url": settings.EFFECTIVE_PUBLIC_URL,
             "callback_url": f"{settings.EFFECTIVE_PUBLIC_URL}/api/v1/analysis/{analysis_id}/webhook",
+            "token": token,
         }
 
         headers = {

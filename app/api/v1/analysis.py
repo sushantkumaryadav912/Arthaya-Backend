@@ -84,14 +84,22 @@ async def n8n_webhook_callback(analysis_id: str, payload: Dict[str, Any]):
 
     return {"received": True, "analysis_id": analysis_id, "status": cached["status"]}
 
-@router.get("/{analysis_id}")
-async def get_analysis_result(analysis_id: str):
-    if analysis_id in ANALYSIS_CACHE and "run" in ANALYSIS_CACHE[analysis_id]:
-        return {"data": ANALYSIS_CACHE[analysis_id]["run"], "demo": True, "generatedAt": datetime.utcnow().isoformat()}
-    
-    # Generate on-demand if missing
-    run_data = await _execute_pipeline("AAPL", "5D", "standard", "claude", analysis_id)
-    return {"data": run_data, "demo": True, "generatedAt": datetime.utcnow().isoformat()}
+@router.get("/{id_or_ticker}")
+async def get_analysis_result(
+    id_or_ticker: str,
+    horizon: str = "5D",
+    depth: str = "standard",
+    gateway: str = "claude"
+):
+    """Retrieves cached analysis run or generates real multi-agent analysis for given ticker/run ID."""
+    if id_or_ticker in ANALYSIS_CACHE and "run" in ANALYSIS_CACHE[id_or_ticker]:
+        return {"data": ANALYSIS_CACHE[id_or_ticker]["run"], "demo": False, "generatedAt": datetime.utcnow().isoformat()}
+
+    ticker = id_or_ticker.upper() if len(id_or_ticker) <= 6 and not id_or_ticker.startswith("ana_") else "AAPL"
+    analysis_id = id_or_ticker if id_or_ticker.startswith("ana_") else f"ana_{uuid.uuid4().hex[:10]}"
+
+    run_data = await _execute_pipeline(ticker, horizon, depth, gateway, analysis_id)
+    return {"data": run_data, "demo": False, "generatedAt": datetime.utcnow().isoformat()}
 
 @router.get("/{analysis_id}/stream")
 async def stream_analysis_events(analysis_id: str, ticker: str = "AAPL", horizon: str = "5D", depth: str = "standard", gateway: str = "claude"):
