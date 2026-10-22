@@ -20,7 +20,7 @@ class N8NClient:
             "horizon": horizon,
             "depth": depth,
             "gateway_provider": gateway_provider,
-            "callback_url": f"http://{settings.HOST}:{settings.PORT}/api/v1/analysis/{analysis_id}/webhook",
+            "callback_url": f"{settings.EFFECTIVE_PUBLIC_URL}/api/v1/analysis/{analysis_id}/webhook",
         }
 
         headers = {

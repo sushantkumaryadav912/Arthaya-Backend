@@ -23,10 +23,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS for Next.js frontend
+# Configure CORS for Next.js frontend (local dev, production, and Vercel preview deployments)
+cors_origins = settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,6 +41,8 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "Arthaya Financial Intelligence Backend",
+        "env": settings.ENV,
+        "public_url": settings.EFFECTIVE_PUBLIC_URL,
         "n8n_orchestrator": settings.N8N_BASE_URL,
         "n8n_webhook": settings.N8N_WEBHOOK_URL,
         "version": "1.0.0"

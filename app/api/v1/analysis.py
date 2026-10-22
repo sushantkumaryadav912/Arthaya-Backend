@@ -55,6 +55,34 @@ async def start_analysis(req: AnalysisStartRequest):
 
     return {"analysis_id": analysis_id, "status": "queued", "n8n": n8n_response}
 
+class N8NWebhookPayload(BaseModel):
+    status: Optional[str] = "completed"
+    agent: Optional[str] = None
+    message: Optional[str] = None
+    progress: Optional[int] = None
+    data: Optional[Dict[str, Any]] = None
+
+@router.post("/{analysis_id}/webhook")
+async def n8n_webhook_callback(analysis_id: str, payload: Dict[str, Any]):
+    """Receives asynchronous workflow completion or step updates from n8n Orchestrator."""
+    if analysis_id not in ANALYSIS_CACHE:
+        ANALYSIS_CACHE[analysis_id] = {
+            "analysisId": analysis_id,
+            "status": payload.get("status", "running"),
+            "updatedAt": datetime.utcnow().isoformat(),
+        }
+    
+    # Update cache with payload data
+    cached = ANALYSIS_CACHE[analysis_id]
+    cached["status"] = payload.get("status", cached.get("status", "completed"))
+    cached["updatedAt"] = datetime.utcnow().isoformat()
+    if "data" in payload or "run" in payload:
+        cached["run"] = payload.get("data") or payload.get("run")
+    if "agent" in payload:
+        cached.setdefault("agent_updates", []).append(payload)
+
+    return {"received": True, "analysis_id": analysis_id, "status": cached["status"]}
+
 @router.get("/{analysis_id}")
 async def get_analysis_result(analysis_id: str):
     if analysis_id in ANALYSIS_CACHE and "run" in ANALYSIS_CACHE[analysis_id]:

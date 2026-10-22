@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: arthaya-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: arthaya-db
+          property: connectionString
+      - key: N8N_BASE_URL
+        value: https://n8n.sushantkumaryadav.com.np
+      - key: N8N_WEBHOOK_URL
+        value: https://n8n.sushantkumaryadav.com.np/webhook/arthaya-orchestrator
+      - key: N8N_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: '["http://localhost:3000","https://arthaya.vercel.app"]'
+
+databases:
+  - name: arthaya-db
+    plan: free
+    region: oregon
+    databaseName: arthaya_db
+    user: arthaya_user
