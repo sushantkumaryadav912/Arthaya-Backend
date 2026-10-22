@@ -35,8 +35,16 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: FIREBASE_PROJECT_ID
-        sync: false
+        value: miora-67ffd
       - key: FIREBASE_CREDENTIALS_JSON
+        sync: false
+      - key: GOOGLE_WEB_CLIENT_ID
+        value: 709981652871-ooh40oomj1outfprsq4vcrh3333omv6v.apps.googleusercontent.com
+      - key: GOOGLE_ANDROID_CLIENT_ID
+        value: 709981652871-sg8q2sohfnbrjteiuajj1vv1t6cqucqd.apps.googleusercontent.com
+      - key: GITHUB_CLIENT_ID
+        value: Ov23liNxGegvzY9xfUsA
+      - key: GITHUB_CLIENT_SECRET
         sync: false
 
 databases:

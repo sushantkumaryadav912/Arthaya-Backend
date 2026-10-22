@@ -35,9 +35,17 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "arthaya-super-secret-jwt-key-change-in-production-2026"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
-    FIREBASE_PROJECT_ID: str = "arthaya"
+    FIREBASE_PROJECT_ID: str = "miora-67ffd"
     FIREBASE_CREDENTIALS_JSON: Optional[str] = None
     FIREBASE_AUTH_DISABLED: bool = False
+
+    # Google OAuth
+    GOOGLE_WEB_CLIENT_ID: str = "709981652871-ooh40oomj1outfprsq4vcrh3333omv6v.apps.googleusercontent.com"
+    GOOGLE_ANDROID_CLIENT_ID: str = "709981652871-sg8q2sohfnbrjteiuajj1vv1t6cqucqd.apps.googleusercontent.com"
+
+    # GitHub OAuth
+    GITHUB_CLIENT_ID: str = "Ov23liNxGegvzY9xfUsA"
+    GITHUB_CLIENT_SECRET: str = "cc3276b7aa74b138b6396d0a88d17242c02e852a"
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

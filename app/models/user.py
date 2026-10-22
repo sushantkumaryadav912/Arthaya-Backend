@@ -6,7 +6,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String(50), primary_key=True, index=True)
-    firebase_uid = Column(String(128), unique=True, index=True, nullable=False)
+    firebase_uid = Column(String(128), unique=True, index=True, nullable=True)
+    google_id = Column(String(128), unique=True, index=True, nullable=True)
+    github_id = Column(String(128), unique=True, index=True, nullable=True)
+    provider = Column(String(50), nullable=False, default="firebase") # firebase, google, github, dev
     email = Column(String(255), unique=True, index=True, nullable=False)
     display_name = Column(String(255), nullable=True)
     photo_url = Column(String(500), nullable=True)
