@@ -312,3 +312,6 @@ async def firebase_sign_up(email: str, password: str, display_name: Optional[str
             return {"success": False, "error": readable, "code": err_msg}
     except Exception as e:
         return {"success": False, "error": f"Firebase registration network error: {str(e)}"}
+
+# Alias for backwards compatibility
+verify_firebase_password = firebase_sign_in

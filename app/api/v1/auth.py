@@ -13,7 +13,9 @@ from app.core.security import (
     create_access_token,
     hash_password,
     verify_password,
-    verify_firebase_password
+    firebase_sign_in,
+    firebase_sign_up,
+    verify_firebase_password,
 )
 from app.core.dependencies import get_current_user, AuthenticatedUser
 from app.database import AsyncSessionLocal
