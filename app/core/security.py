@@ -2,6 +2,8 @@ import os
 import json
 import jwt
 import httpx
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 import firebase_admin
@@ -231,3 +233,38 @@ def decode_access_token(token: str) -> Dict[str, Any]:
         raise ValueError("JWT access token has expired.")
     except jwt.InvalidTokenError as e:
         raise ValueError(f"Invalid JWT access token: {str(e)}")
+
+
+def hash_password(password: str) -> str:
+    """Hashes a plaintext password using salted PBKDF2-HMAC-SHA256 (100,000 iterations)."""
+    salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100_000)
+    return f"{salt}${key.hex()}"
+
+
+def verify_password(password: str, stored_hash: Optional[str]) -> bool:
+    """Verifies a plaintext password against a stored salted hash in constant time."""
+    if not stored_hash or "$" not in stored_hash:
+        return False
+    try:
+        salt, key = stored_hash.split("$", 1)
+        new_key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100_000)
+        return secrets.compare_digest(key, new_key.hex())
+    except Exception:
+        return False
+
+
+async def verify_firebase_password(email: str, password: str) -> Optional[Dict[str, Any]]:
+    """Attempts to verify credentials against Firebase Auth REST API."""
+    api_key = settings.FIREBASE_API_KEY
+    if not api_key:
+        return None
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.post(url, json={"email": email, "password": password, "returnSecureToken": True})
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception:
+        pass
+    return None

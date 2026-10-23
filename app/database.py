@@ -24,7 +24,15 @@ async def get_db():
         finally:
             await session.close()
 
+from sqlalchemy import text
+
 async def init_db():
     import app.models  # Ensures all models are registered on Base.metadata
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Safe schema sync for new user authentication columns
+        for col, col_type in [("password_hash", "VARCHAR(255)"), ("organization", "VARCHAR(255)")]:
+            try:
+                await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {col_type}"))
+            except Exception:
+                pass

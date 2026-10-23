@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     FIREBASE_PROJECT_ID: str = "miora-67ffd"
+    FIREBASE_API_KEY: str = "AIzaSyDsF-LjOVyViriY4CL1sAAWJFBgAwtc37E"
     FIREBASE_CREDENTIALS_JSON: Optional[str] = None
     FIREBASE_AUTH_DISABLED: bool = False
 

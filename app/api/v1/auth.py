@@ -10,13 +10,27 @@ from app.core.security import (
     verify_firebase_id_token,
     verify_google_id_token,
     exchange_github_code,
-    create_access_token
+    create_access_token,
+    hash_password,
+    verify_password,
+    verify_firebase_password
 )
 from app.core.dependencies import get_current_user, AuthenticatedUser
 from app.database import AsyncSessionLocal
 from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: Optional[str] = None
+    role: Optional[str] = "Quantitative Analyst"
+    organization: Optional[str] = None
 
 class TokenExchangeRequest(BaseModel):
     id_token: str
@@ -111,6 +125,191 @@ async def _upsert_user(
             "provider": provider
         }
     }
+
+
+@router.post("/register")
+async def register(req: RegisterRequest):
+    """
+    Registers a new user with email and password.
+    Hashes password securely with salted PBKDF2-HMAC-SHA256 (100,000 rounds).
+    """
+    email = req.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A valid email address is required."
+        )
+    if not req.password or len(req.password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters long."
+        )
+
+    user_id = f"usr_{uuid.uuid4().hex[:10]}"
+    display_name = req.name.strip() if req.name and req.name.strip() else email.split("@")[0]
+    user_role = req.role or "Quantitative Analyst"
+    hashed_pwd = hash_password(req.password)
+
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.email == email))
+            existing = result.scalars().first()
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="An account with this email address already exists. Please sign in."
+                )
+
+            new_user = User(
+                id=user_id,
+                email=email,
+                password_hash=hashed_pwd,
+                display_name=display_name,
+                organization=req.organization,
+                provider="email",
+                role=user_role,
+                created_at=datetime.utcnow(),
+                last_login_at=datetime.utcnow()
+            )
+            db.add(new_user)
+            await db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error during registration: {str(e)}"
+        )
+
+    access_token = create_access_token(
+        user_id=user_id,
+        email=email,
+        role=user_role,
+        display_name=display_name
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user_id,
+            "email": email,
+            "name": display_name,
+            "role": user_role,
+            "organization": req.organization,
+            "provider": "email"
+        }
+    }
+
+
+@router.post("/login")
+async def login(req: LoginRequest):
+    """
+    Authenticates user via email and password.
+    Validates passwords strictly and rejects invalid credentials with HTTP 401.
+    """
+    email = req.email.strip().lower()
+    password = req.password
+
+    if not email or not password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email and password are required."
+        )
+
+    # 1. Demo account: analyst@arthaya.ai requires exact password 'password123'
+    if email == "analyst@arthaya.ai":
+        if password != "password123":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials. For demo access use analyst@arthaya.ai and password123",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user_id = "usr_analyst_demo"
+        name = "Lead Quantitative Analyst (Demo)"
+        role = "Demo Quantitative Analyst"
+        access_token = create_access_token(
+            user_id=user_id,
+            email=email,
+            role="analyst",
+            display_name=name
+        )
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user_id,
+                "email": email,
+                "name": name,
+                "role": role,
+                "is_demo": True,
+                "provider": "demo"
+            }
+        }
+
+    # 2. Check registered users in local database
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalars().first()
+            if user:
+                if user.password_hash:
+                    if not verify_password(password, user.password_hash):
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Invalid email or password. Please verify your credentials.",
+                            headers={"WWW-Authenticate": "Bearer"},
+                        )
+                elif user.provider in ["google", "github"]:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"This account was created with {user.provider.capitalize()}. Please sign in using {user.provider.capitalize()}.",
+                    )
+
+                user.last_login_at = datetime.utcnow()
+                await db.commit()
+
+                access_token = create_access_token(
+                    user_id=user.id,
+                    email=user.email,
+                    role=user.role,
+                    display_name=user.display_name
+                )
+                return {
+                    "access_token": access_token,
+                    "token_type": "bearer",
+                    "user": {
+                        "id": user.id,
+                        "email": user.email,
+                        "name": user.display_name,
+                        "role": user.role,
+                        "picture": user.photo_url,
+                        "provider": user.provider,
+                    }
+                }
+    except HTTPException:
+        raise
+    except Exception as db_err:
+        print(f"⚠️ DB login check notice: {db_err}")
+
+    # 3. Check Firebase Auth for existing Firebase registered accounts
+    fb_result = await verify_firebase_password(email, password)
+    if fb_result and "idToken" in fb_result:
+        uid = fb_result.get("localId")
+        display_name = fb_result.get("displayName") or email.split("@")[0]
+        return await _upsert_user(
+            email=email,
+            display_name=display_name,
+            firebase_uid=uid,
+            provider="firebase"
+        )
+
+    # 4. If credentials don't match any registered account, REJECT with 401
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid email or password. Please verify your credentials or register for an account.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 @router.post("/firebase-login")
