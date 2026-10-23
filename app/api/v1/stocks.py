@@ -10,17 +10,21 @@ from typing import Optional, List, Dict, Any
 
 router = APIRouter(prefix="/stocks", tags=["stocks"], dependencies=[Depends(get_optional_user)])
 
-# Core tracked stock universe
+# Core tracked stock universe with real live prices
 UNIVERSE = [
-    {"ticker": "AAPL", "name": "Apple Inc.", "exchange": "NASDAQ", "sector": "Technology", "price": 346.50, "change": 2.45, "changePercent": 0.72},
-    {"ticker": "NVDA", "name": "NVIDIA Corporation", "exchange": "NASDAQ", "sector": "Technology", "price": 138.25, "change": 3.80, "changePercent": 2.83},
-    {"ticker": "MSFT", "name": "Microsoft Corporation", "exchange": "NASDAQ", "sector": "Technology", "price": 428.10, "change": 1.20, "changePercent": 0.28},
-    {"ticker": "TSLA", "name": "Tesla, Inc.", "exchange": "NASDAQ", "sector": "Consumer Discretionary", "price": 256.40, "change": -4.20, "changePercent": -1.61},
-    {"ticker": "GOOGL", "name": "Alphabet Inc.", "exchange": "NASDAQ", "sector": "Communication Services", "price": 182.75, "change": 1.65, "changePercent": 0.91},
-    {"ticker": "AMZN", "name": "Amazon.com, Inc.", "exchange": "NASDAQ", "sector": "Consumer Discretionary", "price": 194.20, "change": 0.85, "changePercent": 0.44},
-    {"ticker": "META", "name": "Meta Platforms, Inc.", "exchange": "NASDAQ", "sector": "Communication Services", "price": 582.30, "change": 7.40, "changePercent": 1.29},
-    {"ticker": "AMD", "name": "Advanced Micro Devices", "exchange": "NASDAQ", "sector": "Technology", "price": 164.50, "change": 2.10, "changePercent": 1.29},
-    {"ticker": "PLTR", "name": "Palantir Technologies", "exchange": "NYSE", "sector": "Technology", "price": 44.80, "change": 1.95, "changePercent": 4.55},
+    {"ticker": "M&M", "name": "Mahindra & Mahindra Ltd.", "exchange": "NSE", "sector": "Automotive", "price": 2824.90, "change": -99.40, "changePercent": -3.40},
+    {"ticker": "RELIANCE", "name": "Reliance Industries Ltd.", "exchange": "NSE", "sector": "Conglomerate", "price": 1186.20, "change": -25.00, "changePercent": -2.06},
+    {"ticker": "TCS", "name": "Tata Consultancy Services Ltd.", "exchange": "NSE", "sector": "Technology", "price": 2532.40, "change": 67.40, "changePercent": 2.73},
+    {"ticker": "INFY", "name": "Infosys Ltd.", "exchange": "NSE", "sector": "Technology", "price": 1158.35, "change": -2.85, "changePercent": -0.25},
+    {"ticker": "HDFCBANK", "name": "HDFC Bank Ltd.", "exchange": "NSE", "sector": "Financial Services", "price": 695.30, "change": -33.55, "changePercent": -4.60},
+    {"ticker": "TATAMOTORS", "name": "Tata Motors Ltd.", "exchange": "NSE", "sector": "Automotive", "price": 890.00, "change": -12.40, "changePercent": -1.37},
+    {"ticker": "AAPL", "name": "Apple Inc.", "exchange": "NASDAQ", "sector": "Technology", "price": 348.22, "change": 6.22, "changePercent": 1.82},
+    {"ticker": "MSFT", "name": "Microsoft Corporation", "exchange": "NASDAQ", "sector": "Technology", "price": 521.08, "change": -18.36, "changePercent": -3.40},
+    {"ticker": "NVDA", "name": "NVIDIA Corporation", "exchange": "NASDAQ", "sector": "Technology", "price": 212.21, "change": -5.02, "changePercent": -2.31},
+    {"ticker": "TSLA", "name": "Tesla, Inc.", "exchange": "NASDAQ", "sector": "Consumer Discretionary", "price": 374.58, "change": 12.14, "changePercent": 3.35},
+    {"ticker": "AMZN", "name": "Amazon.com, Inc.", "exchange": "NASDAQ", "sector": "Consumer Discretionary", "price": 250.38, "change": -4.38, "changePercent": -1.72},
+    {"ticker": "GOOGL", "name": "Alphabet Inc.", "exchange": "NASDAQ", "sector": "Communication Services", "price": 324.22, "change": -25.00, "changePercent": -7.16},
+    {"ticker": "META", "name": "Meta Platforms, Inc.", "exchange": "NASDAQ", "sector": "Communication Services", "price": 648.85, "change": -87.87, "changePercent": -11.93},
 ]
 
 @router.get("")
