@@ -254,17 +254,61 @@ def verify_password(password: str, stored_hash: Optional[str]) -> bool:
         return False
 
 
-async def verify_firebase_password(email: str, password: str) -> Optional[Dict[str, Any]]:
-    """Attempts to verify credentials against Firebase Auth REST API."""
+async def firebase_sign_in(email: str, password: str) -> Dict[str, Any]:
+    """Authenticates credentials against Firebase Auth REST API in real-time."""
     api_key = settings.FIREBASE_API_KEY
     if not api_key:
-        return None
+        return {"success": False, "error": "Firebase API key not configured on backend."}
+
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(url, json={"email": email, "password": password, "returnSecureToken": True})
-            if resp.status_code == 200:
-                return resp.json()
-    except Exception:
-        pass
-    return None
+            body = resp.json() if resp.content else {}
+            if resp.status_code == 200 and "idToken" in body:
+                return {"success": True, "data": body}
+            
+            err_msg = body.get("error", {}).get("message", "INVALID_LOGIN_CREDENTIALS")
+            readable = "Invalid email or password. Please verify your credentials."
+            if "INVALID_LOGIN_CREDENTIALS" in err_msg or "INVALID_PASSWORD" in err_msg or "EMAIL_NOT_FOUND" in err_msg:
+                readable = "Invalid email or password. Please check your credentials or register for an account."
+            elif "USER_DISABLED" in err_msg:
+                readable = "This user account has been disabled."
+            elif "TOO_MANY_ATTEMPTS_TRY_LATER" in err_msg:
+                readable = "Too many failed login attempts. Please try again later."
+            return {"success": False, "error": readable, "code": err_msg}
+    except Exception as e:
+        return {"success": False, "error": f"Firebase authentication network error: {str(e)}"}
+
+
+async def firebase_sign_up(email: str, password: str, display_name: Optional[str] = None) -> Dict[str, Any]:
+    """Registers a new user in Firebase Auth in real-time."""
+    api_key = settings.FIREBASE_API_KEY
+    if not api_key:
+        return {"success": False, "error": "Firebase API key not configured on backend."}
+
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={api_key}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json={"email": email, "password": password, "returnSecureToken": True})
+            body = resp.json() if resp.content else {}
+            if resp.status_code == 200 and "idToken" in body:
+                # Optionally update display name
+                if display_name:
+                    try:
+                        up_url = f"https://identitytoolkit.googleapis.com/v1/accounts:update?key={api_key}"
+                        await client.post(up_url, json={"idToken": body["idToken"], "displayName": display_name, "returnSecureToken": True})
+                        body["displayName"] = display_name
+                    except Exception:
+                        pass
+                return {"success": True, "data": body}
+            
+            err_msg = body.get("error", {}).get("message", "REGISTRATION_FAILED")
+            readable = "Failed to create account in Firebase."
+            if "EMAIL_EXISTS" in err_msg:
+                readable = "An account with this email address already exists. Please sign in."
+            elif "WEAK_PASSWORD" in err_msg:
+                readable = "Password is too weak. Please use at least 6 characters."
+            return {"success": False, "error": readable, "code": err_msg}
+    except Exception as e:
+        return {"success": False, "error": f"Firebase registration network error: {str(e)}"}

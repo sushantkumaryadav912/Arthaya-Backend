@@ -130,8 +130,7 @@ async def _upsert_user(
 @router.post("/register")
 async def register(req: RegisterRequest):
     """
-    Registers a new user with email and password.
-    Hashes password securely with salted PBKDF2-HMAC-SHA256 (100,000 rounds).
+    Registers a new user in real-time using Firebase Auth, then persists profile in database.
     """
     email = req.email.strip().lower()
     if not email or "@" not in email:
@@ -145,41 +144,50 @@ async def register(req: RegisterRequest):
             detail="Password must be at least 6 characters long."
         )
 
-    user_id = f"usr_{uuid.uuid4().hex[:10]}"
     display_name = req.name.strip() if req.name and req.name.strip() else email.split("@")[0]
     user_role = req.role or "Quantitative Analyst"
+
+    # 1. Register with Firebase Auth in real-time
+    fb_res = await firebase_sign_up(email, req.password, display_name=display_name)
+    if not fb_res.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=fb_res.get("error", "Firebase registration failed."),
+        )
+
+    fb_data = fb_res.get("data", {})
+    firebase_uid = fb_data.get("localId")
     hashed_pwd = hash_password(req.password)
 
+    # 2. Persist in local database
+    user_id = f"usr_{uuid.uuid4().hex[:10]}"
     try:
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(User).where(User.email == email))
             existing = result.scalars().first()
             if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="An account with this email address already exists. Please sign in."
+                existing.firebase_uid = firebase_uid
+                existing.password_hash = hashed_pwd
+                existing.display_name = display_name
+                existing.last_login_at = datetime.utcnow()
+                user_id = existing.id
+            else:
+                new_user = User(
+                    id=user_id,
+                    firebase_uid=firebase_uid,
+                    email=email,
+                    password_hash=hashed_pwd,
+                    display_name=display_name,
+                    organization=req.organization,
+                    provider="firebase",
+                    role=user_role,
+                    created_at=datetime.utcnow(),
+                    last_login_at=datetime.utcnow()
                 )
-
-            new_user = User(
-                id=user_id,
-                email=email,
-                password_hash=hashed_pwd,
-                display_name=display_name,
-                organization=req.organization,
-                provider="email",
-                role=user_role,
-                created_at=datetime.utcnow(),
-                last_login_at=datetime.utcnow()
-            )
-            db.add(new_user)
+                db.add(new_user)
             await db.commit()
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error during registration: {str(e)}"
-        )
+        print(f"⚠️ User persistence notice after Firebase registration: {e}")
 
     access_token = create_access_token(
         user_id=user_id,
@@ -197,7 +205,7 @@ async def register(req: RegisterRequest):
             "name": display_name,
             "role": user_role,
             "organization": req.organization,
-            "provider": "email"
+            "provider": "firebase"
         }
     }
 
@@ -205,8 +213,9 @@ async def register(req: RegisterRequest):
 @router.post("/login")
 async def login(req: LoginRequest):
     """
-    Authenticates user via email and password.
-    Validates passwords strictly and rejects invalid credentials with HTTP 401.
+    Authenticates user.
+    - Demo account: ONLY analyst@arthaya.ai / password123.
+    - All other users: Validated in REAL TIME using Firebase Auth.
     """
     email = req.email.strip().lower()
     password = req.password
@@ -217,7 +226,7 @@ async def login(req: LoginRequest):
             detail="Email and password are required."
         )
 
-    # 1. Demo account: analyst@arthaya.ai requires exact password 'password123'
+    # 1. Demo account check: ONLY analyst@arthaya.ai / password123
     if email == "analyst@arthaya.ai":
         if password != "password123":
             raise HTTPException(
@@ -247,56 +256,12 @@ async def login(req: LoginRequest):
             }
         }
 
-    # 2. Check registered users in local database
-    try:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(User).where(User.email == email))
-            user = result.scalars().first()
-            if user:
-                if user.password_hash:
-                    if not verify_password(password, user.password_hash):
-                        raise HTTPException(
-                            status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Invalid email or password. Please verify your credentials.",
-                            headers={"WWW-Authenticate": "Bearer"},
-                        )
-                elif user.provider in ["google", "github"]:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"This account was created with {user.provider.capitalize()}. Please sign in using {user.provider.capitalize()}.",
-                    )
-
-                user.last_login_at = datetime.utcnow()
-                await db.commit()
-
-                access_token = create_access_token(
-                    user_id=user.id,
-                    email=user.email,
-                    role=user.role,
-                    display_name=user.display_name
-                )
-                return {
-                    "access_token": access_token,
-                    "token_type": "bearer",
-                    "user": {
-                        "id": user.id,
-                        "email": user.email,
-                        "name": user.display_name,
-                        "role": user.role,
-                        "picture": user.photo_url,
-                        "provider": user.provider,
-                    }
-                }
-    except HTTPException:
-        raise
-    except Exception as db_err:
-        print(f"⚠️ DB login check notice: {db_err}")
-
-    # 3. Check Firebase Auth for existing Firebase registered accounts
-    fb_result = await verify_firebase_password(email, password)
-    if fb_result and "idToken" in fb_result:
-        uid = fb_result.get("localId")
-        display_name = fb_result.get("displayName") or email.split("@")[0]
+    # 2. ALL other users: Validate in REAL TIME using Firebase Auth
+    fb_res = await firebase_sign_in(email, password)
+    if fb_res.get("success"):
+        fb_data = fb_res.get("data", {})
+        uid = fb_data.get("localId")
+        display_name = fb_data.get("displayName") or email.split("@")[0]
         return await _upsert_user(
             email=email,
             display_name=display_name,
@@ -304,10 +269,42 @@ async def login(req: LoginRequest):
             provider="firebase"
         )
 
-    # 4. If credentials don't match any registered account, REJECT with 401
+    # 3. Fallback: check local database for users registered with password_hash
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalars().first()
+            if user and user.password_hash:
+                if verify_password(password, user.password_hash):
+                    user.last_login_at = datetime.utcnow()
+                    await db.commit()
+
+                    access_token = create_access_token(
+                        user_id=user.id,
+                        email=user.email,
+                        role=user.role,
+                        display_name=user.display_name
+                    )
+                    return {
+                        "access_token": access_token,
+                        "token_type": "bearer",
+                        "user": {
+                            "id": user.id,
+                            "email": user.email,
+                            "name": user.display_name,
+                            "role": user.role,
+                            "picture": user.photo_url,
+                            "provider": user.provider,
+                        }
+                    }
+    except Exception as db_err:
+        print(f"⚠️ DB login fallback notice: {db_err}")
+
+    # 4. Reject all unverified attempts with HTTP 401
+    err_detail = fb_res.get("error", "Invalid email or password. Please verify your credentials or register for an account.")
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid email or password. Please verify your credentials or register for an account.",
+        detail=err_detail,
         headers={"WWW-Authenticate": "Bearer"},
     )
 
