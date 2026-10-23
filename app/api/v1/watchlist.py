@@ -22,10 +22,12 @@ DEFAULT_ITEMS = [
     {"ticker": "PLTR", "name": "Palantir Technologies", "price": 44.80, "change": 1.95, "direction": "UP", "probability": 0.65},
 ]
 
+_removed_tickers = set()
+
 @router.get("")
 async def get_watchlist(user: AuthenticatedUser = Depends(get_current_user)):
     """Returns watchlist items for the authenticated user (or default institutional watchlist)."""
-    items = list(DEFAULT_ITEMS)
+    items = [dict(it) for it in DEFAULT_ITEMS if it["ticker"] not in _removed_tickers]
     try:
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(WatchlistItem))
@@ -33,7 +35,7 @@ async def get_watchlist(user: AuthenticatedUser = Depends(get_current_user)):
             if db_items:
                 existing_tickers = {it["ticker"] for it in items}
                 for d in db_items:
-                    if d.ticker not in existing_tickers:
+                    if d.ticker not in existing_tickers and d.ticker not in _removed_tickers:
                         items.append({
                             "ticker": d.ticker,
                             "name": d.name,
@@ -51,6 +53,8 @@ async def get_watchlist(user: AuthenticatedUser = Depends(get_current_user)):
 async def add_to_watchlist(req: WatchlistAddRequest, user: AuthenticatedUser = Depends(get_current_user)):
     """Adds a ticker to the watchlist."""
     ticker = req.ticker.strip().upper()
+    _removed_tickers.discard(ticker)
+
     try:
         quote = await MarketService.get_stock_data(ticker)
         name = quote.get("name") or ticker
@@ -81,6 +85,7 @@ async def add_to_watchlist(req: WatchlistAddRequest, user: AuthenticatedUser = D
 async def remove_from_watchlist(ticker: str, user: AuthenticatedUser = Depends(get_current_user)):
     """Removes a ticker from the watchlist."""
     ticker_clean = ticker.strip().upper()
+    _removed_tickers.add(ticker_clean)
     try:
         async with AsyncSessionLocal() as db:
             await db.execute(delete(WatchlistItem).where(WatchlistItem.ticker == ticker_clean))
